@@ -1,0 +1,838 @@
+---
+title: "Internship Assesment"
+author: "Nicole Bosibori Nyagaka"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# **BRIDGING HEALTH AND INEQUALITY: EXPLORING THE LINK BETWEEN HIV PREVALENCE AND MULTIDIMENSIONAL POVERTY**
+
+# **TABLE OF CONTENT**
+
+1.  Introduction
+2.  Problem Statement
+3.  Objectives
+4.  Data Understanding
+5.  Data Preparation
+6.  Visualization of the trends of HIV cases
+7.  HIV and poverty Analysis
+8.  Conclusion
+9.  Recommendations
+
+# **INTRODUCTION**
+
+HIV continues to be a major public health issue in Africa, with particularly high prevalence in sub-Saharan regions. Although prevention and treatment efforts have advanced significantly in recent years, HIV remains a lifelong condition, underscoring the need for consistent data tracking and analysis. Monitoring data on people living with HIV is essential for identifying infection trends, preparing healthcare systems to meet demand, and addressing social challenges such as stigma and inequality.
+
+Beyond its health implications, HIV also affects economic stability, healthcare costs, employment, and deepens existing poverty levels. This highlights the importance of using data not only for disease surveillance but also for designing targeted, multidimensional interventions. By examining patterns in HIV prevalence alongside socioeconomic indicators such as education, income, and access to basic services governments and organizations can make informed decisions, optimize resource allocation, and implement policies that reduce transmission rates and improve the quality of life for those affected.
+
+# **PROBLEM STATEMENT**
+
+HIV remains a serious issue in many countries, especially in sub-Saharan Africa. While treatment has improved, the link between HIV and poverty is still not well understood. Many people living with HIV also face challenges like lack of education, poor sanitation, and limited access to basic services. Understanding how these factors are connected is key to creating better solutions and support for those affected
+
+# **OBJECTIVES**
+
+**Main Objective**
+
+To analyze trends in HIV prevalence and examine its relationship with multidimensional poverty across countries from 2000 to 2023, using data from the WHO and World Bank.
+
+**Specific Objectives**
+
+1.  To create a visualization showing the trend of HIV cases in the countries that account for 75% of the global HIV burden.
+
+2.  To generate a regional visualization of HIV trends, focusing on countries that contribute to 75% of the HIV burden within each WHO region.
+
+3.  To consider differences between countries and years when analyzing the relationship between HIV and poverty, ensuring the findings are reliable and relevant.
+
+4.  To create easy-to-understand charts and summaries that clearly show the results and can help guide decisions by policymakers and health organizations.
+
+# **DATA UNDERSTANDING**
+
+Data sets range from 2000 to 2023 and include essential public health indicators in Africa, such as HIV burden, multidimensional poverty trends. The indicators are important for understanding long-term health trends and socioeconomic development on the continent and provide a foundation for evidence-based policy making and targeted interventions aimed at improving health outcomes and reducing inequality.Below is a description of the data sets:
+
+1.HIV data 2000–2023.csv - Contains annual estimates of people living with HIV globally.
+
+2.Multidimensional_poverty.xlsx - World Bank data on multidimensional poverty indicators including income, education, electricity, sanitation, and water.
+
+# **DATA PREPARATION**
+
+```{r}
+# Load libraries 
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(readr)
+  library(readxl)
+  library(dplyr)
+  library(ggplot2)
+  library(janitor)
+  library(sf)
+  library(rnaturalearth)
+  library(rnaturalearthdata)
+  library(viridis)
+})
+```
+
+```{r}
+# Load datasets
+hivdata <- read_csv("HIV data 2000-2023.csv", show_col_types = FALSE)  
+povertydata <- read_excel("multidimensional_poverty.xlsx")
+```
+
+**Data Preparation of HIV data**
+
+```{r}
+#preview dataset
+head(hivdata)
+```
+
+```{r}
+# cleaning column names
+hivdata <- janitor::clean_names(hivdata)
+```
+
+**Values contains both point estimate and ranges meaning we can extract the point estimate and convert it to numeric for analysis.**
+
+```{r}
+# Create clean-value column
+hivdata <- hivdata %>%
+  mutate(
+    clean_value = str_extract(value, "^[0-9 ]+") %>%    # extract numbers
+      str_replace_all(" ", "") %>%                      # remove spaces
+      as.numeric()                                      # convert to numeric
+ )
+```
+
+```{r}
+#preview-data
+head(hivdata)
+```
+
+```{r}
+# Check for duplicate -values
+sum(duplicated(hivdata))
+```
+
+```{r}
+# Check for missing-values
+colSums(is.na(hivdata))
+```
+
+**Looking at column value to see if it was also affected**
+
+```{r}
+#missing-values
+hivdata %>% filter(is.na(clean_value)) %>%
+select(location,period,value)
+```
+
+**Lets count the No data in the value column because they show us how many values are missing**
+
+```{r}
+# checking-values
+hivdata %>%   
+filter(value == "No data") %>%  
+summarise(nodata_count = n())
+```
+
+**The number of missing values in Clean values and the Value column is very few compared to the total so we could drop them without affecting the data**
+
+```{r}
+# dropping missing values
+hivdata <- hivdata %>%  
+filter(!is.na(value)) %>%      # drop NA  
+filter(value != "No data")     # drop No data` ``
+```
+
+**To view the cleaned data**
+
+```{r}
+# view cleaned hivdata
+print(hivdata)
+```
+
+**Data Preparation of multidimensional poverty data**
+
+```{r}
+head(povertydata)
+```
+
+```{r}
+# cleaning column names
+povertydata <- janitor::clean_names(povertydata)
+```
+
+**Convert replace "-" with NA first because "-" means missing value.**
+
+```{r}
+povertydata <- povertydata %>%
+mutate(across(where(is.character), ~na_if(., "-")))
+```
+
+```{r}
+povertydata <- povertydata %>%
+  mutate(across(
+    c(educational_attainment_percent, educational_enrollment_percent,
+      electricity_percent, sanitation_percent, drinking_water_percent),
+    ~ as.numeric(na_if(., ""))
+  ))
+```
+
+**Convert character columns that are actually numbers to numeric**
+
+```{r}
+# checking for missing values
+colSums(is.na(povertydata))
+```
+
+**Fill missing values with the column median**
+
+```{r}
+povertydata <- povertydata %>%
+  mutate(across(
+    c(educational_attainment_percent, educational_enrollment_percent,
+      electricity_percent, sanitation_percent, drinking_water_percent),
+    ~ ifelse(is.na(.), median(., na.rm = TRUE), .)
+  ))
+```
+
+```{r}
+colSums(is.na(povertydata))
+```
+
+```{r}
+#check for duplicate -values}
+sum(duplicated(povertydata))
+```
+
+```{r}
+print(povertydata)
+```
+
+# **VISUALIZATION OF TRENDS IN HIV CASES**
+
+**1.Top Countries Contributing 75% to the Global HIV Burden**
+
+```{r}
+library(viridis)
+
+ggplot(top_country_total, aes(x = "", y = total_hiv, fill = location)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  labs(
+    title = "Top Countries Contributing 75%\n to Global HIV Burden"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(color = "black", size = 16, face = "bold", hjust = 0.5),
+    legend.text = element_text(color = "black", size = 12),
+    legend.title = element_text(color = "black", size = 14),
+    legend.background = element_rect(fill = "white")
+  ) +
+  scale_fill_viridis_d(option = "plasma")
+```
+
+The analysis shows that the countries that contribute to 75 percent of the global burden of HIV are mainly South Africa, Nigeria, Mozambique, Uganda, and Tanzania. South Africa accounts for the largest share, with several other African countries also having a significant number of cases. Together, these countries represent the core focus areas where intensified efforts are needed to reduce the global impact of HIV.
+
+**2.Trend of HIV cases in the countries contributing to 75% of the burden within each WHO region**
+
+**WHO region countries:**
+
+AFR → Africa
+
+AMR → Americas
+
+SEAR → South-East Asia Region
+
+EUR → Europe
+
+EMR → Eastern Mediterranean Region
+
+WPR → Western Pacific Region
+
+```{r}
+# Load libraries
+library(patchwork)
+
+# Map WHO region codes to full names
+region_names <- c(
+  "AFR" = "Africa",
+  "AMR" = "Americas",
+  "SEAR" = "South-East Asia Region",
+  "EUR" = "Europe",
+  "EMR" = "Eastern Mediterranean Region",
+  "WPR" = "Western Pacific Region"
+)
+
+# Summarize total HIV cases by WHO region
+region_summary <- hivdata %>%
+  filter(period == 2023) %>%
+  group_by(parent_location_code) %>%
+  summarize(total_cases = sum(clean_value, na.rm = TRUE)) %>%
+  ungroup()
+
+region_summary$WHORegion <- region_names[region_summary$parent_location_code]
+
+# Find WHO region with the highest total HIV cases
+top_region <- region_summary %>%
+  arrange(desc(total_cases)) %>%
+  slice(1) %>%
+  pull(parent_location_code)
+
+top_region_name <- region_names[top_region]
+
+# Countries contributing to 75% of burden within the top region
+top_region_countries <- hivdata %>%
+  filter(period == 2023, parent_location_code == top_region) %>%
+  group_by(location) %>%
+  summarize(total_cases = sum(clean_value, na.rm = TRUE)) %>%
+  arrange(desc(total_cases)) %>%
+  mutate(cum_percentage = cumsum(total_cases) / sum(total_cases)) %>%
+  filter(cum_percentage <= 0.75)
+
+# Plot 1: Pie Chart of WHO Regions
+p1 <- ggplot(region_summary, aes(x = "", y = total_cases, fill = WHORegion)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(
+    fill = "WHO Region"
+  ) +
+  theme_void() +
+  theme(
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10),
+    legend.position = "right"
+  )
+
+# Plot 2: Pie Chart of Top Countries in the Top Region
+p2 <- ggplot(top_region_countries, aes(x = "", y = total_cases, fill = location)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(
+    fill = "Country"
+  ) +
+  theme_void() +
+  theme(
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10),
+    legend.position = "right"
+  )
+
+# Combine the two plots 
+(p1 + p2) +
+  plot_annotation(
+    title = "Trend of HIV cases in the \ncountries contributing to 75% of the \nburden within each WHO region",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+    )
+  )
+```
+
+In 2023, Africa carried the biggest share of the global HIV burden. Within the region, just a handful of countries — including South Africa, Nigeria, Mozambique, Kenya, Uganda, Tanzania, and Zambia — made up 75% of the total cases. This shows just how important it is to focus efforts and resources on these countries to make real progress in the fight against HIV.
+
+**HIV AND POVERTY ANALYSIS**
+
+**Merge the datasets using column Country**
+
+```{r}
+# Make both names consistent
+
+povertydata <- povertydata %>%
+  rename(
+    country = economy,
+    year = reporting_year
+  )
+
+hivdata <- hivdata %>%
+  rename(
+    country = location,
+    year = period
+  )
+
+# Select relevant columns from povertydata
+povertydata_merge <- povertydata %>%
+  select(
+    country,
+    educational_attainment_percent,
+    educational_enrollment_percent,
+    electricity_percent,
+    sanitation_percent,
+    drinking_water_percent,
+    multidimensional_poverty_headcount_ratio_percent
+  )
+
+# Merge datasets
+merged_data <- left_join(hivdata, povertydata_merge, by = "country")
+
+# Print merged data
+print(merged_data)
+```
+
+```{r}
+merged_data$country <- as.factor(merged_data$country)
+merged_data$year <- as.factor(merged_data$year)
+```
+
+**Points to note:**
+
+Analyze relationship between HIV burden and multidimensional poverty
+
+Analyze individual factors education, electricity, water and sanitation
+
+Account for random effects country and year
+
+```{r}
+library(lme4)
+
+# Fit the mixed-effects model
+model <- lmer(
+  clean_value ~ multidimensional_poverty_headcount_ratio_percent +
+    educational_attainment_percent +
+    educational_enrollment_percent +
+    electricity_percent +
+    sanitation_percent +
+    drinking_water_percent +
+    (1 | country) + (1 | year),
+  data = merged_data,
+  REML = FALSE
+)
+
+# model results
+summary(model)
+```
+
+The analysis of the relationship between the number of people living with HIV and multidimensional poverty, along with education enrollment, electricity access, sanitation, and drinking water, using a mixed-effects model that accounted for random effects across country and year. The results showed that higher poverty is strongly associated with more HIV cases, with about 37,625 additional cases for every 1% rise in poverty. Higher school enrollment and greater electricity access were linked to fewer HIV cases, while better access to drinking water showed a small positive link. Educational attainment and sanitation did not have significant effects.Using the random effects country and year, the model showed that HIV cases vary widely between countries and over time, highlighting that location and time play a key role in HIV patterns alongside poverty and services.
+
+# **CONCLUSION**
+
+The analysis showed a strong link between higher poverty levels and more HIV cases between 2000 and 2023. Higher school enrollment and better electricity access were associated with fewer cases, while differences across countries and years highlighted the importance of local context. Reducing poverty and improving access to education and basic services are critical for lowering the HIV burden.
+
+# **RECOMENDATIONS**
+
+-   Invest in poverty reduction efforts to support lower HIV rates.
+
+-   Improve access to education and electricity in vulnerable regions.
+
+-   Examine how urbanization and migration contribute to the spread of HIV.
+
+-   Adapt HIV prevention and treatment strategies to fit each country's and region's changing needs.
+
+# **CHILD MORTALITY TRENDS AND SPATIAL DISTRIBUTION IN EAST AFRICA**
+
+# **TABLE OF CONTENT**
+
+1.  Introduction
+2.  Problem Statement
+3.  Objectives
+4.  Data Understanding
+5.  Data Preparation
+6.  Spatial Analysis
+7.  Trend Analysis
+8.  Conclusion
+9.  Recommendations
+
+# **INTRODUCTION**
+
+Child mortality remains a major public health issue in East Africa, despite global efforts to reduce child deaths. Many countries in the region continue to report high rates of under-five and neonatal mortality, linked to challenges in healthcare, maternal health, nutrition, and economic conditions.
+
+The under-five mortality rate tracks deaths before a child's fifth birthday, while neonatal mortality covers deaths within the first 28 days of life. These indicators are key measures of progress toward Sustainable Development Goal 3: ensuring healthy lives for all.
+
+This study examines recent patterns and trends in child mortality across East African Community (EAC) countries. Using data from trusted global sources alongside spatial analysis, it highlights areas most in need of urgent policy action to prevent avoidable child deaths.
+
+# **PROBLEM STATEMENT**
+
+Despite global gains, East Africa continues to face high under-five and neonatal mortality rates, exposing persistent health system gaps and inequalities in care.
+
+Timely, country-specific analysis is crucial to understand where the burden is heaviest and how trends are shifting. Without this, efforts to target resources and interventions risk falling short.
+
+This study offers a clear visualization of mortality patterns and trends across East African Community countries to support better decision-making and action.
+
+# **OBJECTIVES**
+
+**Main Objective**
+
+Analyze and visualize the latest estimates and historical trends of under-five and neonatal mortality in East African Community countries
+
+**Specific Objectives**
+
+1.  Extract and filter mortality data for the eight EAC countries.
+
+2.  Map the most recent under-five and neonatal mortality rates using spatial analysis.
+
+3.  Plot historical trends, showing both the EAC average and individual country patterns.
+
+4.  Identify countries with the highest mortality rates based on the latest data.
+
+5.  Provide insights to guide policies aimed at reducing child deaths across the region.
+
+# **DATA UNDERSTANDING**
+
+The datasets cover child mortality trends from 1980 to 2025, focusing on neonatal and under-five mortality. These indicators are key to tracking child survival, healthcare access, and the impact of public health efforts. Below is a description of the data sets:
+
+1,dataset_datascience - Includes neonatal and under-five mortality with breakdowns by sex, wealth, and country
+
+2.  neonatal_mortality_rate - Annual neonatal deaths for births around the world
+
+3.  under_five_mortality_rate - Annual under 5 yrs old deaths in several countries
+
+# **DATA PREPARATION**
+
+```{r}
+# Load datasets
+neonatal_mortality <- read_csv("neonatal_mortality_rate.csv", show_col_types = FALSE)
+underfive_mortality <- read_csv("under_five_mortality_rate.csv", show_col_types = FALSE)
+data <- read_csv("dataset_datascience.csv", show_col_types = FALSE)
+```
+
+```{r}
+head(neonatal_mortality)
+```
+
+**Lets clean this data**
+
+1.  Select useful columns only
+2.  Clean columns names
+3.  Parse the TIME_PERIOD correctly to extract the year
+4.  Drop unnecessary columns with alot of missing values
+
+```{r}
+# Select only useful columns
+neonatal_mortality <- neonatal_mortality %>%  
+select(REF_AREA, `Geographic area`, TIME_PERIOD, OBS_VALUE)
+```
+
+**The useful columns in this case are:**
+
+Ref_area
+
+Geographic area
+
+TIme_period
+
+Obs_value
+
+```{r}
+# Clean column names
+neonatal_mortality <- neonatal_mortality %>%
+  janitor::clean_names()
+```
+
+```{r}
+# Parse TIME_PERIOD to extract the year
+neonatal_mortality <- neonatal_mortality %>%  
+mutate(year = as.numeric(substr(time_period, 1, 4)))
+```
+
+**Extracts year from time period**
+
+```{r}
+# Drop columns with too many missing values
+neonatal_mortality <- neonatal_mortality %>% 
+select(where(~ mean(!is.na(.)) > 0.5))
+```
+
+**This code keeps only columns where at least 50% of the values are not missing**
+
+```{r}
+print(neonatal_mortality)
+```
+
+**Now onto Under Five Mortality rate**
+
+1.  Select useful columns only
+2.  Clean columns names
+3.  Parse the TIME_PERIOD correctly to extract the year
+4.  Drop unnecessary columns with alot of missing values
+
+```{r}
+head(underfive_mortality)
+```
+
+```{r}
+# Select only useful columns
+underfive_mortality <- underfive_mortality %>% 
+select(REF_AREA,`Geographic area`, TIME_PERIOD, OBS_VALUE) 
+```
+
+**The useful columns in this case are:**
+
+Ref_area
+
+Geographic area
+
+TIme_period
+
+Obs_value
+
+```{r}
+# Clean column names
+underfive_mortality <- underfive_mortality %>% 
+janitor::clean_names()
+```
+
+```{r}
+# Parse TIME_PERIOD to extract the year
+underfive_mortality<- underfive_mortality %>%  
+mutate(year = as.numeric(substr(time_period, 1, 4)))
+```
+
+**Extracts year from time period**
+
+```{r}
+# Drop columns with too many missing values
+underfive_mortality <- underfive_mortality %>% 
+select(where(~ mean(!is.na(.)) > 0.5))
+```
+
+**This code keeps only columns where at least 50% of the values are not missing**
+
+```{r}
+print(underfive_mortality)
+```
+
+**Finally the last dataset**
+
+**Cleaning Steps**
+
+1.Select useful columns
+
+2.Clean column names
+
+3.Parse Series Year into numeric
+
+4.Drop columns with too many missing values
+
+```{r}
+head(data)
+```
+
+```{r}
+# Select useful columns
+data <- data %>%
+  select(
+    REF_AREA,
+    `Geographic area`,
+    Indicator,
+    Sex,
+    `Wealth Quintile`,
+    `Series Year`,
+    `Reference Date`,
+    `Observation Value`,
+    `Observation Status`,
+    `Unit of measure`,
+    `Series Type`,
+    `Series Category`,
+    `Series Method`
+  )
+```
+
+```{r}
+# Clean column names
+data <- data %>% 
+clean_names()
+```
+
+```{r}
+# Parse Series Year into numeric
+data <- data %>%  
+mutate(year = suppressWarnings(as.numeric(series_year)))
+```
+
+**Extracts year from series year**
+
+```{r}
+# Drop columns with too many missing values
+data <- data %>%  
+select(where(~ mean(!is.na(.)) > 0.5))
+```
+
+**This code keeps only columns where at least 50% of the values are not missing**
+
+```{r}
+print(data)
+```
+
+# SPATIAL ANALYSIS
+
+**Filter data for the eight countries belonging to the East African Community**
+
+The EAC countries are:
+
+-   Burundi
+
+-   Democratic Republic of the Congo
+
+-   Kenya
+
+-   Rwanda
+
+-   South Sudan
+
+-   Uganda
+
+-   United Republic of Tanzania
+
+-   Somalia
+
+```{r}
+# List of East African Community countries
+eac_countries <- c(
+  "Burundi",
+  "Kenya",
+  "Rwanda",
+  "South Sudan",
+  "United Republic of Tanzania",
+  "Uganda",
+  "Democratic Republic of the Congo",
+  "Somalia"
+)
+```
+
+```{r}
+# Filter the data dataset
+eac_data <- data %>%
+  filter(geographic_area %in% eac_countries)
+
+head(eac_data)
+```
+
+```{r}
+# Load package
+library(sf)
+
+shapefile_path <- "C:/Users/PC/Desktop/internship_task_dscience/data"
+
+# Load individual Level 0 shapefiles for each EAC country
+burundi      <- st_read(file.path(shapefile_path, "gadm41_BDI_0.shp"))
+kenya        <- st_read(file.path(shapefile_path, "gadm41_KEN_0.shp"))
+rwanda       <- st_read(file.path(shapefile_path, "gadm41_RWA_0.shp"))
+south_sudan  <- st_read(file.path(shapefile_path, "gadm41_SSD_0.shp"))
+tanzania     <- st_read(file.path(shapefile_path, "gadm41_TZA_0.shp"))
+uganda       <- st_read(file.path(shapefile_path, "gadm41_UGA_0.shp"))
+drc          <- st_read(file.path(shapefile_path, "gadm41_COD_0.shp"))
+somalia      <- st_read(file.path(shapefile_path, "gadm41_SOM_0.shp"))
+
+# Combine all into one spatial object
+eac_map <- rbind(
+  burundi, kenya, rwanda, south_sudan,
+  tanzania, uganda, drc, somalia
+)
+
+print(eac_map)
+```
+
+```{r}
+# Filter for Neonatal
+neonatal_data <- eac_data %>%
+  filter(indicator == "Neonatal mortality rate")
+```
+
+```{r}
+# Filter for Under-five
+under5_data <- eac_data %>%
+  filter(indicator == "Under-five mortality rate")
+```
+
+```{r}
+# For Neonatal mortality
+neonatal_latest <- eac_data %>%
+  filter(indicator == "Neonatal mortality rate") %>%
+  group_by(geographic_area) %>%
+  slice_max(order_by = year, n = 1) %>%
+  ungroup()
+
+# For Under-five mortality
+under5_latest <- eac_data %>%
+  filter(indicator == "Under-five mortality rate") %>%
+  group_by(geographic_area) %>%
+  slice_max(order_by = year, n = 1) %>%
+  ungroup()
+```
+
+```{r}
+
+# Merge shapefile with data
+eac_map_neonatal <- eac_map %>%
+  left_join(neonatal_latest, by = c("COUNTRY" = "geographic_area"))
+
+eac_map_under5 <- eac_map %>%
+  left_join(under5_latest, by = c("COUNTRY" = "geographic_area"))
+```
+
+```{r}
+# Neonatal Mortality Map
+ggplot(eac_map_neonatal) +
+  geom_sf(aes(fill = observation_value)) +
+  scale_fill_viridis_c(option = "plasma") +
+  labs(title = "Latest Neonatal Mortality Rate in EAC Countries",
+       fill = "Deaths per 1000 live births") +
+  theme_minimal()
+
+# Under-five Mortality Map
+ggplot(eac_map_under5) +
+  geom_sf(aes(fill = observation_value)) +
+  scale_fill_viridis_c(option = "inferno") +
+  labs(title = "Latest Under-Five Mortality Rate in EAC Countries",
+       fill = "Deaths per 1000 live births") +
+  theme_minimal()
+```
+
+These two maps show the latest neonatal and under-five mortality rates across East African Community countries.
+
+Neonatal mortality, referring to deaths within the first 28 days of life, remains high in countries such as Somalia and South Sudan, with rates exceeding 50 per 1,000 live births. In comparison, Tanzania, Rwanda, and Uganda report lower rates, typically under 30.
+
+Under-five mortality presents an even more concerning situation. In some regions, especially Somalia and South Sudan, reported rates surpass 600 per 1,000 live births. This may indicate severe health challenges or reflect inconsistencies in data reporting.
+
+These maps highlight the critical need to strengthen maternal and child health services, particularly in areas affected by conflict and instability within the region.
+
+# **TREND ANALYSIS**
+
+)
+
+```{r}
+# Rank all countries by neonatal mortality highest to lowest
+neonatal_ranked <- neonatal_latest %>%
+  arrange(desc(observation_value))
+
+
+neonatal_ranked
+```
+
+```{r}
+# Rank all countries by under-five mortality highest to lowest
+under5_ranked <- under5_latest %>%
+  arrange(desc(observation_value))
+
+under5_ranked
+```
+
+An analysis of the most recent data on neonatal and under-five mortality across East African Community countries reveals stark disparities in child survival. South Sudan consistently reports the highest mortality rates for both indicators. In 2023, its under-five mortality rate exceeded 760 deaths per 1,000 live births, while its neonatal mortality rate surpassed 65 deaths per 1,000 live births. Somalia also exhibits alarmingly high rates, though slightly lower than those of South Sudan.
+
+These patterns are clearly reflected in the spatial visualizations, where both countries appear in the darkest color bands, indicating the most severe mortality burdens. The findings highlight the critical need for targeted interventions in maternal and child health, particularly in fragile and conflict-affected states such as South Sudan and Somalia, where systemic challenges likely contribute to poor health outcomes and data limitations.
+
+# **CONCLUSION**
+
+This study explored the trends and spatial distribution of child mortality across countries in the East African Community using recent data and mapping tools. Although there has been progress, child mortality rates for both newborns and children under five remain alarmingly high in some countries, especially those affected by conflict such as South Sudan and Somalia.
+
+South Sudan has the highest number of deaths among children under five, with more than 760 deaths for every 1,000 live births, and also ranks among the highest for newborn deaths. Somalia also shows very high figures in both categories. On the other hand, countries like Rwanda, Tanzania, and Uganda have made strong improvements, with lower and steadily declining death rates.
+
+The results show that progress is uneven across the region, with ongoing challenges in healthcare access, maternal support, and basic social services. There is an urgent need for focused, country-specific action to improve child survival and meet global development goals.
+
+# **RECOMENDATION**
+
+-   Support Fragile Countries\
+    Rebuild health systems in places like South Sudan and Somalia with trained staff, medicines, and better care for mothers and babies.
+
+<!-- -->
+
+-    Target High-Risk Areas\
+    Focus resources on regions with the highest child deaths, guided by spatial data.
+
+-   Expand Community Care\
+    Strengthen outreach for vaccines, nutrition, and health education in underserved areas.
+
+<!-- -->
+
+-    Address Root Causes\
+    Tackle poverty, hunger, poor sanitation, and lack of education alongside health efforts.
+
+<!-- -->
+
+-    Encourage Regional Sharing\
+    Learn from EAC countries making progress and apply those lessons region-wide.
