@@ -818,21 +818,11 @@ The results show that progress is uneven across the region, with ongoing challen
 
 -   Support Fragile Countries\
     Rebuild health systems in places like South Sudan and Somalia with trained staff, medicines, and better care for mothers and babies.
-
-<!-- -->
-
--    Target High-Risk Areas\
+-   Target High-Risk Areas\
     Focus resources on regions with the highest child deaths, guided by spatial data.
-
 -   Expand Community Care\
     Strengthen outreach for vaccines, nutrition, and health education in underserved areas.
-
-<!-- -->
-
--    Address Root Causes\
+-   Address Root Causes\
     Tackle poverty, hunger, poor sanitation, and lack of education alongside health efforts.
-
-<!-- -->
-
--    Encourage Regional Sharing\
+-   Encourage Regional Sharing\
     Learn from EAC countries making progress and apply those lessons region-wide.
